@@ -1,6 +1,7 @@
 package com.rwj.idefx.view;
 
 import atlantafx.base.theme.Styles;
+import com.rwj.idefx.controller.ApplicationController;
 import com.rwj.idefx.model.AppConfig;
 import com.rwj.idefx.model.FileModel;
 import com.rwj.idefx.model.ThemeInfo;
@@ -24,10 +25,53 @@ import java.util.List;
 
 public class StartView extends Application {
     private static AppConfig appConfig;
+    private Button openProjectButton, newProjectButton, settingButton, backButton;
 
     @Override
     public void start(Stage primaryStage) {
         appConfig.getTheme().setTheme();
+
+        Scene scene1 = createScene1();
+        Scene scene2 = createScene2();
+        primaryStage.setScene(scene1);
+
+        // 设置舞台标题
+        primaryStage.setTitle("ideFX Welcome Window");
+        primaryStage.setResizable(false);
+        // 显示舞台
+        primaryStage.show();
+
+        openProjectButton.setOnAction(event ->loadProject());
+        newProjectButton.setOnAction(event -> {
+            CreateProjectDialog newProjectDialog = new CreateProjectDialog();
+            FileModel createdProject = newProjectDialog.showDialog(primaryStage);
+            if (createdProject != null) {
+                primaryStage.close();
+                appConfig.addProjectToList(createdProject);
+                ApplicationController.saveConfigure(appConfig);
+                enterProject(createdProject);
+            }
+        });
+
+        settingButton.setOnAction(event -> primaryStage.setScene(scene2));
+
+        backButton.setOnAction(event -> {
+            primaryStage.setScene(scene1);
+            ApplicationController.saveConfigure(appConfig);
+        });
+    }
+    public static void setAppConfig(AppConfig config) {
+        appConfig = config;
+    }
+
+    private void loadProject(){
+        //TODO 给“打开项目”按钮增加功能
+    }
+    private void enterProject(FileModel project){
+        System.out.println("打开项目" + project.filePath());
+    }
+
+    private Scene createScene1() {
         // 创建第一个场景
         BorderPane borderPane1 = new BorderPane();
 
@@ -35,21 +79,60 @@ public class StartView extends Application {
         topText1.getStyleClass().addAll(Styles.TITLE_1);
         BorderPane.setAlignment(topText1, Pos.CENTER);
 
-        Button newProjectButton = new Button("Create Project", new FontIcon(Feather.PLUS));
-        Button openProjectButton = new Button("Open Project", new FontIcon(Feather.FOLDER));
-        Button settingButton = new Button("Setting", new FontIcon(Feather.SETTINGS));
+        newProjectButton = new Button("Create Project", new FontIcon(Feather.PLUS));
+        openProjectButton = new Button("Open Project", new FontIcon(Feather.FOLDER));
+        settingButton = new Button("Setting", new FontIcon(Feather.SETTINGS));
 
         var toolbar1 = new ToolBar(newProjectButton, openProjectButton, settingButton);
-
 
         TextField searchField = new TextField();
         searchField.setPromptText("Search for your project");
         VBox.setMargin(searchField, new Insets(10, 10, 0, 10));
 
+        VBox centerVBox = new VBox(searchField, createProjectList());
+        borderPane1.setTop(topText1);
+        borderPane1.setCenter(centerVBox);
+        borderPane1.setBottom(toolbar1);
+
+        return new Scene(borderPane1, 380, 500);
+    }
+
+    private Scene createScene2() {
+        Text topText2 = new Text("Setting");
+        topText2.getStyleClass().addAll(Styles.TITLE_1);
+        BorderPane.setAlignment(topText2, Pos.CENTER);
+
+        GridPane gridPane = new GridPane();
+        gridPane.setVgap(10);
+        gridPane.setHgap(10);
+        gridPane.setPadding(new Insets(30));
+        BorderPane.setMargin(gridPane, new Insets(10));
+
+
+        BorderPane borderPane2 = new BorderPane();
+        backButton = new Button("Back", new FontIcon(Feather.ARROW_LEFT));
+        BorderPane.setAlignment(backButton, Pos.BOTTOM_RIGHT);
+
+        List<String> themeNames = ThemeInfo.getThemeNames();
+        ObservableList<String> options = FXCollections.observableArrayList(themeNames);
+        ComboBox<String> comboBox = new ComboBox<>(options);
+        comboBox.setValue(appConfig.getTheme().getDisplayName());
+        comboBox.setOnAction(e -> {
+            String selectedTheme = comboBox.getValue();
+            ThemeInfo themeByName = ApplicationController.getThemeByName(selectedTheme);
+            if (themeByName != null) appConfig.setTheme(themeByName);
+        });
+        gridPane.addRow(0,new Label("Theme:"), comboBox);
+        borderPane2.setTop(topText2);
+        borderPane2.setCenter(gridPane);
+        borderPane2.setBottom(backButton);
+
+        return new Scene(borderPane2, 380, 500);
+    }
+    private ListView<FileModel> createProjectList(){
         ListView<FileModel> projectListView = new ListView<>();
         VBox.setMargin(projectListView, new Insets(10, 10, 10, 10));
         Styles.toggleStyleClass(projectListView, Styles.BORDERED);
-
 
         ObservableList<FileModel> items = FXCollections.observableArrayList(appConfig.getProjectList());
         projectListView.setItems(items);
@@ -63,77 +146,40 @@ public class StartView extends Application {
             }
         });
 
-        VBox centerVBox = new VBox(searchField, projectListView);
-        borderPane1.setTop(topText1);
-        borderPane1.setCenter(centerVBox);
-        borderPane1.setBottom(toolbar1);
+        ContextMenu contextMenu = new ContextMenu();
+        MenuItem moveUpItem = new MenuItem("Move Up");
+        MenuItem moveDownItem = new MenuItem("Move Down");
+        MenuItem deleteItem = new MenuItem("Delete");
 
-        Scene scene1 = new Scene(borderPane1, 380, 500);
+        moveUpItem.setOnAction(actionEvent -> {
+            int selectedIndex = projectListView.getSelectionModel().getSelectedIndex();
+            if (selectedIndex > 0) {
+                appConfig.moveProjectUp(selectedIndex);
+                items.setAll(appConfig.getProjectList());
+                projectListView.getSelectionModel().select(selectedIndex - 1);
 
-        // 创建第二个场景
-        Text topText2 = new Text("Setting");
-        topText2.getStyleClass().addAll(Styles.TITLE_1);
-        BorderPane.setAlignment(topText2, Pos.CENTER);
-
-        GridPane gridPane = new GridPane();
-        gridPane.setVgap(10);
-        gridPane.setHgap(10);
-        gridPane.setPadding(new Insets(30));
-        BorderPane.setMargin(gridPane, new Insets(10));
-
-        BorderPane borderPane2 = new BorderPane();
-        Button backButton = new Button("Back", new FontIcon(Feather.ARROW_LEFT));
-        BorderPane.setAlignment(backButton, Pos.BOTTOM_RIGHT);
-
-        List<String> themeNames = ThemeInfo.getThemeNames();
-        ObservableList<String> options = FXCollections.observableArrayList(themeNames);
-        ComboBox<String> comboBox = new ComboBox<>(options);
-        comboBox.setValue(appConfig.getTheme().getDisplayName());
-        comboBox.setOnAction(e -> {
-            String selectedTheme = comboBox.getValue();
-            ThemeInfo themeByName = getThemeByName(selectedTheme);
-            if (themeByName != null) appConfig.setTheme(themeByName);
-        });
-        gridPane.addRow(0,new Label("Theme:"), comboBox);
-        borderPane2.setTop(topText2);
-        borderPane2.setCenter(gridPane);
-        borderPane2.setBottom(backButton);
-
-        Scene scene2 = new Scene(borderPane2, 380, 500);
-
-
-        // 设置初始场景
-        primaryStage.setScene(scene1);
-
-        // 设置舞台标题
-        primaryStage.setTitle("ideFX Welcome Window");
-        primaryStage.setResizable(false);
-        // 显示舞台
-        primaryStage.show();
-
-        // 切换到第二个场景
-
-        newProjectButton.setOnAction(event ->{});
-        settingButton.setOnAction(event -> primaryStage.setScene(scene2));
-        backButton.setOnAction(event -> {
-            primaryStage.setScene(scene1);
-            //TODO 保存当前appConfig到指定目录
-        });
-    }
-
-    private ThemeInfo getThemeByName(String themeName) {
-        for (ThemeInfo value : ThemeInfo.values()) {
-            if (value.getDisplayName().equals(themeName)) {
-                return value;
             }
-        }
-        return null;
-    }
-    public static void setAppConfig(AppConfig config) {
-        appConfig = config;
-    }
-    private void enterProject(FileModel project){
+        });
+        moveDownItem.setOnAction(actionEvent -> {
+            int selectedIndex = projectListView.getSelectionModel().getSelectedIndex();
+            if (selectedIndex < items.size() - 1) {
+                appConfig.moveProjectDown(selectedIndex);
+                items.setAll(appConfig.getProjectList());
+                projectListView.getSelectionModel().select(selectedIndex + 1);
+            }
 
+        });
+        deleteItem.setOnAction(actionEvent -> {
+            FileModel selectedProject = projectListView.getSelectionModel().getSelectedItem();
+            if (selectedProject != null) {
+                appConfig.removeProjectIf(project -> project.equals(selectedProject));
+                items.setAll(appConfig.getProjectList());
+            }
+        });
+
+        contextMenu.getItems().addAll(moveUpItem,moveDownItem,deleteItem);
+        projectListView.setContextMenu(contextMenu);
+
+        return projectListView;
     }
 }
-
