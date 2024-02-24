@@ -7,7 +7,7 @@ module com.rwj.idefx {
     requires atlantafx.base;
 
     opens com.rwj.idefx to javafx.fxml;
-    exports com.rwj.idefx.test;
-    exports com.rwj.idefx.model;
+//    exports com.rwj.idefx.controller;
+//    exports com.rwj.idefx.model;
     exports com.rwj.idefx;
 }

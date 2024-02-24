@@ -1,6 +1,7 @@
 package com.rwj.idefx.controller;
 
 import com.rwj.idefx.model.AppConfig;
+import com.rwj.idefx.model.ThemeInfo;
 
 import java.io.File;
 import java.io.IOException;
@@ -9,20 +10,20 @@ import java.io.ObjectOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 
-public class FileController {
-    private static FileController INSTANCE;
+public class ApplicationController {
+    private static ApplicationController INSTANCE;
     private static AppConfig appConfig;
 
     private static final String configPath = "files/config";
 
-    private FileController(){}
+    private ApplicationController(){}
     public static AppConfig loadAppConfig() {
         File file = new File(configPath);
         if(!file.exists()) {
             try {
                 if(file.createNewFile()) {
                     appConfig = new AppConfig();
-                    saveConfigure();
+                    saveConfigure(appConfig);
                 } else {
                     throw new RuntimeException("无法创建配置文件！");
                 }
@@ -37,17 +38,30 @@ public class FileController {
                 throw new RuntimeException("加载配置文件失败", e);
             }
         }
-        INSTANCE = new FileController();
+        INSTANCE = new ApplicationController();
         return appConfig;
     }
 
-    public static void saveConfigure(){
+    public static void saveConfigure(AppConfig newConfig){
         try (ObjectOutputStream stream = new ObjectOutputStream(Files.newOutputStream(Paths.get(configPath)))){
+            appConfig = newConfig;
             stream.writeObject(appConfig);
             stream.flush();
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
-}
 
+    public static ThemeInfo getThemeByName(String themeName) {
+        for (ThemeInfo value : ThemeInfo.values()) {
+            if (value.getDisplayName().equals(themeName)) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    public static boolean validString(String input) {
+        return null != input && !input.trim().isEmpty();
+    }
+}
