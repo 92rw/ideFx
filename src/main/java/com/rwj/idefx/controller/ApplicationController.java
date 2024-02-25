@@ -18,21 +18,31 @@ public class ApplicationController {
 
     private ApplicationController(){}
     public static AppConfig loadAppConfig() {
-        File file = new File(configPath);
-        if(!file.exists()) {
+        File configFile = new File(configPath);
+        File parentDir = configFile.getParentFile();
+        if (!parentDir.exists()) {
+            if (!parentDir.mkdirs()) {
+                try {
+                    throw new IOException("无法创建目录" + parentDir.getAbsolutePath());
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }
+
+        if (!configFile.exists()) {
             try {
-                if(file.createNewFile()) {
+                if(configFile.createNewFile()) {
                     appConfig = new AppConfig();
                     saveConfigure(appConfig);
                 } else {
-                    throw new RuntimeException("无法创建配置文件！");
+                    throw new IOException("无法创建配置文件: " + configFile.getAbsolutePath());
                 }
             } catch (IOException e) {
-                throw new RuntimeException("创建配置文件失败", e);
+                throw new RuntimeException(e);
             }
-        }
-        else {
-            try (ObjectInputStream stream = new ObjectInputStream(Files.newInputStream(file.toPath()))) {
+        } else {
+            try (ObjectInputStream stream = new ObjectInputStream(Files.newInputStream(configFile.toPath()))) {
                 appConfig = (AppConfig) stream.readObject();
             } catch (IOException | ClassNotFoundException e) {
                 throw new RuntimeException("加载配置文件失败", e);

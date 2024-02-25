@@ -27,8 +27,11 @@ public class StartView extends Application {
     private static AppConfig appConfig;
     private Button openProjectButton, newProjectButton, settingButton, backButton;
 
+    private Stage primaryStage;
+
     @Override
     public void start(Stage primaryStage) {
+        this.primaryStage = primaryStage;
         appConfig.getTheme().setTheme();
 
         Scene scene1 = createScene1();
@@ -65,10 +68,10 @@ public class StartView extends Application {
     }
 
     private void loadProject(){
-        //TODO 给“打开项目”按钮增加功能
+
     }
     private void enterProject(FileModel project){
-        System.out.println("打开项目" + project.filePath());
+        new MainView(project).display(primaryStage);
     }
 
     private Scene createScene1() {
@@ -81,7 +84,7 @@ public class StartView extends Application {
 
         newProjectButton = new Button("Create Project", new FontIcon(Feather.PLUS));
         openProjectButton = new Button("Open Project", new FontIcon(Feather.FOLDER));
-        settingButton = new Button("Setting", new FontIcon(Feather.SETTINGS));
+        settingButton = new Button("Settings", new FontIcon(Feather.SETTINGS));
 
         var toolbar1 = new ToolBar(newProjectButton, openProjectButton, settingButton);
 
@@ -146,40 +149,34 @@ public class StartView extends Application {
             }
         });
 
-        ContextMenu contextMenu = new ContextMenu();
-        MenuItem moveUpItem = new MenuItem("Move Up");
-        MenuItem moveDownItem = new MenuItem("Move Down");
-        MenuItem deleteItem = new MenuItem("Delete");
+        ContextMenu contextMenu = ContextMenuBuilder.create()
+                .addMenuItem("Move Up", () -> {
+                    int selectedIndex = projectListView.getSelectionModel().getSelectedIndex();
+                    if (selectedIndex > 0) {
+                        appConfig.moveProjectUp(selectedIndex);
+                        items.setAll(appConfig.getProjectList());
+                        projectListView.getSelectionModel().select(selectedIndex - 1);
+                    }
+                })
+                .addMenuItem("Move Down", () -> {
+                    int selectedIndex = projectListView.getSelectionModel().getSelectedIndex();
+                    if (selectedIndex < items.size() - 1) {
+                        appConfig.moveProjectDown(selectedIndex);
+                        items.setAll(appConfig.getProjectList());
+                        projectListView.getSelectionModel().select(selectedIndex + 1);
+                    }
+                })
+                .addMenuItem("Delete", () -> {
+                    FileModel selectedProject = projectListView.getSelectionModel().getSelectedItem();
+                    if (selectedProject != null) {
+                        appConfig.removeProjectIf(project -> project.equals(selectedProject));
+                        items.setAll(appConfig.getProjectList());
+                    }
+                }).build();
 
-        moveUpItem.setOnAction(actionEvent -> {
-            int selectedIndex = projectListView.getSelectionModel().getSelectedIndex();
-            if (selectedIndex > 0) {
-                appConfig.moveProjectUp(selectedIndex);
-                items.setAll(appConfig.getProjectList());
-                projectListView.getSelectionModel().select(selectedIndex - 1);
-
-            }
-        });
-        moveDownItem.setOnAction(actionEvent -> {
-            int selectedIndex = projectListView.getSelectionModel().getSelectedIndex();
-            if (selectedIndex < items.size() - 1) {
-                appConfig.moveProjectDown(selectedIndex);
-                items.setAll(appConfig.getProjectList());
-                projectListView.getSelectionModel().select(selectedIndex + 1);
-            }
-
-        });
-        deleteItem.setOnAction(actionEvent -> {
-            FileModel selectedProject = projectListView.getSelectionModel().getSelectedItem();
-            if (selectedProject != null) {
-                appConfig.removeProjectIf(project -> project.equals(selectedProject));
-                items.setAll(appConfig.getProjectList());
-            }
-        });
-
-        contextMenu.getItems().addAll(moveUpItem,moveDownItem,deleteItem);
         projectListView.setContextMenu(contextMenu);
 
         return projectListView;
     }
+
 }
