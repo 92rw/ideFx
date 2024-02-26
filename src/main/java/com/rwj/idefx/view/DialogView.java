@@ -1,20 +1,19 @@
 package com.rwj.idefx.view;
 
-import javafx.scene.control.Alert;
-import javafx.scene.control.Label;
-import javafx.scene.control.TextArea;
+import javafx.scene.control.*;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.Priority;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.Optional;
 
 public class DialogView {
     public static void alertException(String header, Exception exception) {
         Alert alert = new Alert(Alert.AlertType.ERROR);
         alert.setTitle("Error");
-        alert.setHeaderText(header);
-        alert.setContentText("This Exception happens when handling your instructions, please contact project author to solve this problem.");
+        alert.setHeaderText(null);
+        alert.setContentText(header);
 
         var stringWriter = new StringWriter();
         var printWriter = new PrintWriter(stringWriter);
@@ -36,4 +35,22 @@ public class DialogView {
         alert.getDialogPane().setExpandableContent(content);
         alert.showAndWait();
     }
+
+    public static boolean comfirmDelete(String filePath) {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Confirmation Delete");
+        alert.setHeaderText(null);
+        alert.setContentText("Do you want to delete file: " + filePath + " ?");
+
+        ButtonType yesBtn = new ButtonType("Yes", ButtonBar.ButtonData.YES);
+        ButtonType noBtn = new ButtonType("No", ButtonBar.ButtonData.NO);
+        ButtonType cancelBtn = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+
+        alert.getButtonTypes().setAll(yesBtn, noBtn, cancelBtn);
+
+        // 显示对话框并等待用户响应
+        Optional<ButtonType> result = alert.showAndWait();
+        return result.isPresent() && result.get() == yesBtn;
+    }
 }
+

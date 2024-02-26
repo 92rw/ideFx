@@ -7,8 +7,7 @@ import javafx.application.Application;
 
 public class Launcher {
     public static void main(String[] args) {
-        AppConfig appConfig = ApplicationController.loadAppConfig();
-        StartView.setAppConfig(appConfig);
+        ApplicationController.loadAppConfig();
         Application.launch(StartView.class, args);
     }
 }

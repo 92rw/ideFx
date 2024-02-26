@@ -2,6 +2,7 @@ package com.rwj.idefx.view;
 
 import com.rwj.idefx.controller.ProjectController;
 import com.rwj.idefx.controller.RuntimeController;
+import com.rwj.idefx.model.ExecutionResult;
 import com.rwj.idefx.model.FileModel;
 import javafx.beans.binding.Bindings;
 import javafx.geometry.Orientation;
@@ -12,8 +13,6 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
-import javafx.scene.text.Text;
-import javafx.scene.text.TextFlow;
 import javafx.stage.Stage;
 
 import org.kordamp.ikonli.feather.Feather;
@@ -23,13 +22,18 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Comparator;
+import java.util.Optional;
 
 
 public class MainView {
     private FileModel project;
     private TextArea fileContentArea;
 
+    private TextArea runtimeText;
+
     private TreeView<File> directoryTree;
+
+    private ComboBox<String> fileComboBox;
     public MainView(FileModel project) {
         this.project = project;
     }
@@ -45,38 +49,23 @@ public class MainView {
         Button configButton = new Button("Config", new FontIcon(Feather.TOOL));
         Button menuButton = new Button("Menu", new FontIcon(Feather.MENU));
 
-        refreshButton.setOnAction(e -> refreshDirectory());
+        refreshButton.setOnAction(e -> refreshDirectory(directoryTree.getSelectionModel().getSelectedItem()));
+        runButton.setOnAction(e-> runProgram());
+        compileButton.setOnAction(e -> compileProject());
+        fileComboBox = new ComboBox<>();
+        fileComboBox.setPrefWidth(200);
+        setCurrentFile(null);
 
-        ComboBox<File> fileComboBox = new ComboBox<>();
-
-        // 创建弹性空间
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        ToolBar toolBarLeft = new ToolBar(
-                newButton,
-                projectButton,
 
-                new Separator(Orientation.VERTICAL),
-                configButton,
-                refreshButton
+        ToolBar toolBar = new ToolBar(
+                newButton,projectButton,new Separator(Orientation.VERTICAL),
+                configButton,refreshButton,spacer,
+                fileComboBox,menuButton,compileButton,runButton
         );
-
-        ToolBar toolBarRight = new ToolBar(
-                fileComboBox,
-                menuButton,
-                compileButton,
-                runButton
-        );
-
-        // 将ToolBar和弹性空间添加到HBox中
-        HBox hbox = new HBox(toolBarLeft, spacer, toolBarRight);
-
-
-
         fileContentArea = new TextArea();
         fileContentArea.setEditable(false);
-
-
 
         createTree();
         SplitPane runtimePane = new SplitPane();
@@ -85,39 +74,32 @@ public class MainView {
         SplitPane projectPane = new SplitPane(directoryTree,fileContentArea);
         projectPane.setOrientation(Orientation.HORIZONTAL);
         projectPane.setDividerPositions(0.2);
-        TextFlow runtimeText = new TextFlow(new Text("Java Runtime Version: " + System.getProperty("java.runtime.version")));
-        runtimePane.getItems().addAll(projectPane, new ScrollPane(runtimeText));
-
-
-
+        runtimeText = new TextArea(("Java Runtime Version: " + System.getProperty("java.runtime.version") + "\n"));
+        runtimePane.getItems().addAll(projectPane, runtimeText);
 
         BorderPane borderPane = new BorderPane();
-        borderPane.setTop(hbox);
+//        borderPane.setTop(hbox);
+        borderPane.setTop(toolBar);
         borderPane.setCenter(runtimePane);
         Scene scene = new Scene(borderPane, 1000, 800);
 
 
         Stage stage = new Stage();
         stage.setScene(scene);
-        stage.setTitle(project.fileName() + "[" + project.filePath() + "]");
+        stage.setTitle("Project: " + project.fileName() + " [" + project.filePath() + "]");
         stage.setOnShown(windowEvent -> ownerStage.close());
         stage.show();
 
     }
 
     private void openFile(File file) {
-        String fileNameWithExtension = file.getName();
-        System.out.println(fileNameWithExtension);
-        System.out.println(file.getParent());
-        String substring = fileNameWithExtension.substring(0, fileNameWithExtension.lastIndexOf('.'));
-        System.out.println(substring);
-        System.out.println(file.getAbsolutePath());
         try {
-            String content = Files.readString(file.toPath());
+            String content = null;
             if (file.getName().endsWith(".class")) {
-                content = RuntimeController.Decompile(file.getParent(), fileNameWithExtension.substring(0, fileNameWithExtension.lastIndexOf('.')));
+                content = RuntimeController.deCompile(file.getAbsolutePath());
+            } else {
+                content = Files.readString(file.toPath());
             }
-
             fileContentArea.setText(content);
             fileContentArea.setEditable(true); // 根据需求调整是否允许编辑
         } catch (Exception e) {
@@ -125,8 +107,6 @@ public class MainView {
             System.out.println(e.getMessage());
         }
     }
-
-
 
     private void createTree() {
         TreeItem<File> rootItem = scan(new File(project.filePath()), 3);
@@ -165,7 +145,7 @@ public class MainView {
                     .addMenuItem("Copy", this::copyFile)
                     .addMenuItem("Paste", this::pasteFile)
                     .addMenuItem("Delete", this::deleteFile)
-                    .addMenuItem("Refresh", this::refreshDirectory)
+                    .addMenuItem("Refresh",(() ->refreshDirectory(directoryTree.getSelectionModel().getSelectedItem())))
                     .addMenuItem("Show in Explorer", this::showinExplorer)
                     .build();
 
@@ -180,12 +160,14 @@ public class MainView {
         directoryTree.setOnMouseClicked(event -> {
             if (event.getClickCount() == 2 && event.getButton() == MouseButton.PRIMARY) {
                 fileContentArea.setEditable(false);
-                File selectFile = directoryTree.getSelectionModel().getSelectedItem().getValue();
+                TreeItem<File> selectedItem = directoryTree.getSelectionModel().getSelectedItem();
+                File selectFile = selectedItem.getValue();
                 if (selectFile.isDirectory()) {
-                    scan(selectFile,1);
+                    refreshDirectory(selectedItem);
                     fileContentArea.setText("You are browsing FilePath: " + selectFile.getAbsolutePath());
                 } else {
                     openFile(selectFile);
+                    setCurrentFile(selectFile);
                 }
 
             }
@@ -200,20 +182,17 @@ public class MainView {
         });
     }
     private TreeItem<File> scan(File dir, int depth) {
-        var parent = new TreeItem<>(new File(dir.getAbsolutePath()));
+        var parent = new TreeItem<>(dir);
         File[] files = dir.listFiles();
         depth--;
 
-        if (files != null) {
+        if (files != null && depth >= 0) {
             for (File f : files) {
-                if (f.isDirectory() && depth > 0) {
-                    parent.getChildren().add(scan(f, depth));
-                } else {
-                    var leaf = new TreeItem<>(new File(f.getAbsolutePath()));
-                    parent.getChildren().add(leaf);
-                }
+                TreeItem<File> childItem = f.isDirectory() ? scan(f, depth) : new TreeItem<>(f);
+                parent.getChildren().add(childItem);
             }
-            parent.getChildren().sort(Comparator.comparing((TreeItem<File> ti) -> !ti.getValue().isDirectory())
+            parent.getChildren().sort(Comparator.
+                    comparing((TreeItem<File> ti) -> !ti.getValue().isDirectory())
                     .thenComparing(ti -> ti.getValue().getName()));
 
         }
@@ -221,31 +200,54 @@ public class MainView {
         return parent;
     }
 
-    private void refreshDirectory() {
-        TreeItem<File> selectedItem = directoryTree.getSelectionModel().getSelectedItem();
-        if (selectedItem != null) {
-            selectedItem.getChildren().clear();
-            File directory = selectedItem.getValue();
-            if (directory.isDirectory()) {
-                scan(directory, 1);
+    private void refreshDirectory(TreeItem<File> directoryItem) {
+        if (directoryItem == null) {
+            directoryItem = directoryTree.getSelectionModel().getSelectedItem();
+            if (directoryItem == null || directoryItem.getParent() == null) {
+                directoryItem = directoryTree.getRoot();
+            } else {
+                directoryItem = directoryItem.getParent();
             }
+        }
+
+        File directory = directoryItem.getValue();
+        if (directory.isDirectory()) {
+            directoryItem.getChildren().clear();
+            TreeItem<File> newScannedItem  = scan(directory, 2);
+            directoryItem.getChildren().addAll(newScannedItem.getChildren());
         }
     }
 
+    private void compileProject() {
+        try {
+            if (RuntimeController.buildProject(project.filePath())) {
+                refreshDirectory(directoryTree.getRoot());
+            }
+        } catch (Exception e) {
+            DialogView.alertException("Fail to Compile Project", e);
+        }
+
+    }
     private void deleteFile(){
-        //TODO 修改代码逻辑
         TreeItem<File> selectedItem = directoryTree.getSelectionModel().getSelectedItem();
         if (selectedItem != null) {
-            try {
-                if (ProjectController.deleteFile(selectedItem.getValue())) {
-                    refreshDirectory();
+            File deletePath = selectedItem.getValue();
+            boolean comfirmDelete = DialogView.comfirmDelete(deletePath.getAbsolutePath());
+            if (comfirmDelete) {
+                if (deletePath.exists() && ProjectController.deleteFiles(deletePath)) {
+                    TreeItem<File> parentItem = selectedItem.getParent();
+                    if (parentItem != null) {
+                        refreshDirectory(parentItem);
+                    } else {
+                        refreshDirectory(directoryTree.getRoot());
+                    }
+                } else {
+                    Alert errorAlert = new Alert(Alert.AlertType.ERROR, "File could not be deleted.", ButtonType.OK);
+                    errorAlert.showAndWait();
                 }
-            } catch (RuntimeException e) {
-                DialogView.alertException("Delete failed", e);
             }
 
         }
-
     }
     private void pasteFile(){
         TreeItem<File> selectedItem = directoryTree.getSelectionModel().getSelectedItem();
@@ -254,7 +256,17 @@ public class MainView {
         } catch (IOException e) {
             DialogView.alertException("Error",e);
         } finally {
-            refreshDirectory();
+            refreshDirectory(selectedItem);
+        }
+    }
+
+    private void setCurrentFile(File file) {
+        String currentFileName = ProjectController.loadCurrentFile(project);
+        if (file == null || !file.getName().endsWith(".java")) {
+            fileComboBox.setValue(currentFileName);
+        } else {
+            fileComboBox.setValue(file.getName());
+            ProjectController.setCurrentFile(file);
         }
     }
     private void copyFile(){
@@ -273,7 +285,15 @@ public class MainView {
             }
         }
     }
-    private void runProgram(File file) {
+    private void runProgram() {
+        compileProject();
+        new Thread(() -> {
+            ExecutionResult res = RuntimeController.executeCode(directoryTree.getSelectionModel().getSelectedItem().getValue().getAbsolutePath(), "java", "Main", runtimeText::appendText);
+            if (res.exitCode() != 0) {
+                runtimeText.appendText(res.output());
+            }
+            runtimeText.appendText("\nProcess finished with exit code "+ res.exitCode() + "\n");
 
+        }).start();
     }
 }

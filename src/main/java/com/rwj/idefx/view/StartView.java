@@ -2,8 +2,9 @@ package com.rwj.idefx.view;
 
 import atlantafx.base.theme.Styles;
 import com.rwj.idefx.controller.ApplicationController;
-import com.rwj.idefx.model.AppConfig;
+import com.rwj.idefx.controller.ProjectController;
 import com.rwj.idefx.model.FileModel;
+import com.rwj.idefx.model.ProjectConfig;
 import com.rwj.idefx.model.ThemeInfo;
 import javafx.application.Application;
 import javafx.collections.FXCollections;
@@ -17,14 +18,18 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Text;
+import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
 import org.kordamp.ikonli.feather.Feather;
 import org.kordamp.ikonli.javafx.FontIcon;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class StartView extends Application {
-    private static AppConfig appConfig;
+    private ListView<FileModel> projectListView;
     private Button openProjectButton, newProjectButton, settingButton, backButton;
 
     private Stage primaryStage;
@@ -32,7 +37,7 @@ public class StartView extends Application {
     @Override
     public void start(Stage primaryStage) {
         this.primaryStage = primaryStage;
-        appConfig.getTheme().setTheme();
+        ApplicationController.setTheme();
 
         Scene scene1 = createScene1();
         Scene scene2 = createScene2();
@@ -50,8 +55,6 @@ public class StartView extends Application {
             FileModel createdProject = newProjectDialog.showDialog(primaryStage);
             if (createdProject != null) {
                 primaryStage.close();
-                appConfig.addProjectToList(createdProject);
-                ApplicationController.saveConfigure(appConfig);
                 enterProject(createdProject);
             }
         });
@@ -60,17 +63,33 @@ public class StartView extends Application {
 
         backButton.setOnAction(event -> {
             primaryStage.setScene(scene1);
-            ApplicationController.saveConfigure(appConfig);
+            ApplicationController.saveConfigure();
         });
-    }
-    public static void setAppConfig(AppConfig config) {
-        appConfig = config;
     }
 
     private void loadProject(){
+        DirectoryChooser directoryChooser = new DirectoryChooser();
+        directoryChooser.setTitle("Select Project");
+        File selectedDirectory = directoryChooser.showDialog(primaryStage);
+        if (selectedDirectory != null) {
+            String name = selectedDirectory.getName();
+            String path = selectedDirectory.getAbsolutePath();
 
+            ProjectConfig loadedProjectConfig = new ProjectConfig(name, path);
+            FileModel loadedProjectModel = null;
+            try {
+                loadedProjectModel = ProjectController.createProject(loadedProjectConfig);
+            } catch (IOException e) {
+                DialogView.alertException("Error when handling your request",e);
+            }
+            if (loadedProjectModel != null) {
+                enterProject(loadedProjectModel);
+            }
+        }
     }
+
     private void enterProject(FileModel project){
+        ApplicationController.addProject(project);
         new MainView(project).display(primaryStage);
     }
 
@@ -90,6 +109,14 @@ public class StartView extends Application {
 
         TextField searchField = new TextField();
         searchField.setPromptText("Search for your project");
+        searchField.textProperty().addListener((observable, oldValue, newValue) -> {
+            // 假设有一个方法filterProjects根据搜索关键字过滤项目
+            List<FileModel> filteredProjects = filterProjects(newValue);
+
+            // 更新项目列表视图的项目
+            projectListView.setItems(FXCollections.observableArrayList(filteredProjects));
+        });
+
         VBox.setMargin(searchField, new Insets(10, 10, 0, 10));
 
         VBox centerVBox = new VBox(searchField, createProjectList());
@@ -119,11 +146,10 @@ public class StartView extends Application {
         List<String> themeNames = ThemeInfo.getThemeNames();
         ObservableList<String> options = FXCollections.observableArrayList(themeNames);
         ComboBox<String> comboBox = new ComboBox<>(options);
-        comboBox.setValue(appConfig.getTheme().getDisplayName());
+        comboBox.setValue(ApplicationController.currentTheme());
         comboBox.setOnAction(e -> {
             String selectedTheme = comboBox.getValue();
-            ThemeInfo themeByName = ApplicationController.getThemeByName(selectedTheme);
-            if (themeByName != null) appConfig.setTheme(themeByName);
+            ApplicationController.setThemeByName(selectedTheme);
         });
         gridPane.addRow(0,new Label("Theme:"), comboBox);
         borderPane2.setTop(topText2);
@@ -133,11 +159,11 @@ public class StartView extends Application {
         return new Scene(borderPane2, 380, 500);
     }
     private ListView<FileModel> createProjectList(){
-        ListView<FileModel> projectListView = new ListView<>();
+        projectListView = new ListView<>();
         VBox.setMargin(projectListView, new Insets(10, 10, 10, 10));
         Styles.toggleStyleClass(projectListView, Styles.BORDERED);
 
-        ObservableList<FileModel> items = FXCollections.observableArrayList(appConfig.getProjectList());
+        ObservableList<FileModel> items = FXCollections.observableArrayList(ApplicationController.currentProjects());
         projectListView.setItems(items);
         projectListView.setCellFactory(param -> new ProjectListCell());
         projectListView.setOnMouseClicked(event -> {
@@ -153,30 +179,35 @@ public class StartView extends Application {
                 .addMenuItem("Move Up", () -> {
                     int selectedIndex = projectListView.getSelectionModel().getSelectedIndex();
                     if (selectedIndex > 0) {
-                        appConfig.moveProjectUp(selectedIndex);
-                        items.setAll(appConfig.getProjectList());
+                        ApplicationController.moveUp(selectedIndex);
+                        items.setAll(ApplicationController.currentProjects());
                         projectListView.getSelectionModel().select(selectedIndex - 1);
                     }
                 })
                 .addMenuItem("Move Down", () -> {
                     int selectedIndex = projectListView.getSelectionModel().getSelectedIndex();
                     if (selectedIndex < items.size() - 1) {
-                        appConfig.moveProjectDown(selectedIndex);
-                        items.setAll(appConfig.getProjectList());
+                        ApplicationController.moveDown(selectedIndex);
+                        items.setAll(ApplicationController.currentProjects());
                         projectListView.getSelectionModel().select(selectedIndex + 1);
                     }
                 })
                 .addMenuItem("Delete", () -> {
                     FileModel selectedProject = projectListView.getSelectionModel().getSelectedItem();
                     if (selectedProject != null) {
-                        appConfig.removeProjectIf(project -> project.equals(selectedProject));
-                        items.setAll(appConfig.getProjectList());
+                        ApplicationController.delete(selectedProject);
+                        items.setAll(ApplicationController.currentProjects());
                     }
                 }).build();
 
         projectListView.setContextMenu(contextMenu);
 
         return projectListView;
+    }
+    private List<FileModel> filterProjects(String keyword) {
+        return ApplicationController.currentProjects().stream()
+                .filter(project -> project.filePath().toLowerCase().contains(keyword.toLowerCase()))
+                .collect(Collectors.toList());
     }
 
 }

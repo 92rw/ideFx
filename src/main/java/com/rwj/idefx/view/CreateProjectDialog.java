@@ -13,6 +13,8 @@ import javafx.stage.Stage;
 import org.kordamp.ikonli.feather.Feather;
 import org.kordamp.ikonli.javafx.FontIcon;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.Optional;
 
 public class CreateProjectDialog {
@@ -22,7 +24,6 @@ public class CreateProjectDialog {
     private GridPane gridPane;
 
     private Label pathLabel;
-
     private CheckBox samplecodeBox;
 
     ToggleGroup projectLanguage, projectSystem;
@@ -43,13 +44,8 @@ public class CreateProjectDialog {
 
         dialog.setResultConverter(dialogButton -> {
             if (dialogButton == createButtonType) {
-                // 用户点击创建，调用 createProject 并返回 FileModel
-                ProjectConfig project = createProject();
-                if (project != null) {
-                    return new FileModel(project.name(), project.rootPath());
-                }
+                return createProject();
             }
-            // 对于其他情况（包括取消），返回 null
             return null;
         });
 
@@ -59,23 +55,28 @@ public class CreateProjectDialog {
 
     private void setProjectLocation() {
         if (ApplicationController.validString(nameField.getText()) && ApplicationController.validString(pathField.getText())) {
-            pathLabel.setText(pathField.getText() + "\\" + nameField.getText());
+            pathLabel.setText(pathField.getText() + File.separator + nameField.getText());
         }
     }
-    private ProjectConfig createProject() {
+    private FileModel createProject() {
         if (!ApplicationController.validString(pathField.getText())) return null;
-        String firstPath = samplecodeBox.isSelected() ? "/src/Main.java" : "";
         ToggleButton selectedSystem = (ToggleButton) projectSystem.getSelectedToggle();
         ToggleButton selectedLanguage = (ToggleButton) projectLanguage.getSelectedToggle();
+
+        String projectName = nameField.getText();
+        String projectPath = pathField.getText().replace("\\", File.separator).replace("/", File.separator) + File.separator + projectName;
+        String firstPath = samplecodeBox.isSelected() ? "/src/Main.java" : "";
         String projectSystem = selectedSystem.getText();
         String projectLanguage = selectedLanguage.getText();
-        ProjectConfig projectConfig = new ProjectConfig(nameField.getText(), pathLabel.getText(), firstPath,projectSystem, projectLanguage);
 
-        if (ProjectController.createProject(projectConfig)) {
-            return projectConfig;
-        } else {
-            return null;
+        ProjectConfig projectConfig = new ProjectConfig(projectName, projectPath, firstPath,projectSystem, projectLanguage);
+        FileModel projectFileModel = null;
+        try {
+            projectFileModel = ProjectController.createProject(projectConfig);
+        } catch (IOException e) {
+            DialogView.alertException("Error when handling your request",e);
         }
+        return projectFileModel;
     }
     private void createGridPane() {
         gridPane = new GridPane();
@@ -170,3 +171,4 @@ public class CreateProjectDialog {
         return new HBox(systemBtn1, systemBtn2, systemBtn3);
     }
 }
+
