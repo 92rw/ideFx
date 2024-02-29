@@ -2,7 +2,7 @@ package com.rwj.idefx.model;
 
 import java.io.Serializable;
 
-public class CustomizeModel implements Serializable {
+public class CustomizeModel implements Serializable{
     private static final long serialVersionUID = 114514L;
 
     private FileModel currentFile;
@@ -15,5 +15,5 @@ public class CustomizeModel implements Serializable {
         this.currentFile = currentFile;
     }
 
-
+    public FileModel getCurrentFile() {return this.currentFile;}
 }

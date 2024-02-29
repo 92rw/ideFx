@@ -36,11 +36,11 @@ public class DialogView {
         alert.showAndWait();
     }
 
-    public static boolean comfirmDelete(String filePath) {
+    public static boolean comfirmOperation(String comfirmation) {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.setTitle("Confirmation Delete");
+        alert.setTitle("Confirmation Operation");
         alert.setHeaderText(null);
-        alert.setContentText("Do you want to delete file: " + filePath + " ?");
+        alert.setContentText(comfirmation);
 
         ButtonType yesBtn = new ButtonType("Yes", ButtonBar.ButtonData.YES);
         ButtonType noBtn = new ButtonType("No", ButtonBar.ButtonData.NO);
@@ -52,5 +52,14 @@ public class DialogView {
         Optional<ButtonType> result = alert.showAndWait();
         return result.isPresent() && result.get() == yesBtn;
     }
+
+    public static void operationResult(String result) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Operation Result");
+        alert.setHeaderText(null);
+        alert.setContentText(result);
+        alert.showAndWait();
+    }
+
 }
 
