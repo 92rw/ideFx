@@ -110,14 +110,18 @@ public class MainView {
         consoleArea = new TextArea(RuntimeController.getJVMInfo() + "\n");
         consoleArea.setEditable(false);
         TextField inputField = new TextField();
+        inputField.setPromptText("Enter command or input...");
         inputField.setOnAction(event -> {
             String inputText = inputField.getText();
             RuntimeController.redirectToProcess(inputText);
             consoleArea.appendText(inputText + "\n");
             inputField.clear();
         });
+        BorderPane consolePane = new BorderPane();
+        consolePane.setCenter(consoleArea);
+        consolePane.setBottom(inputField);
 
-        runtimePane.getItems().addAll(projectPane, new VBox(consoleArea, inputField));
+        runtimePane.getItems().addAll(projectPane, consolePane);
 
         BorderPane borderPane = new BorderPane();
         borderPane.setTop(toolBar);
