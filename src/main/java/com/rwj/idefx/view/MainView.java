@@ -4,15 +4,22 @@ import com.rwj.idefx.controller.ProjectController;
 import com.rwj.idefx.controller.RuntimeController;
 import com.rwj.idefx.model.ExecutionResult;
 import com.rwj.idefx.model.FileModel;
+import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.SimpleBooleanProperty;
+import javafx.beans.property.SimpleStringProperty;
+import javafx.beans.property.StringProperty;
+import javafx.beans.value.ChangeListener;
+import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
+import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.input.MouseButton;
-import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
-import javafx.scene.layout.Region;
+import javafx.scene.layout.*;
+import javafx.scene.text.Text;
+import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
 
 import org.kordamp.ikonli.feather.Feather;
@@ -21,91 +28,177 @@ import org.kordamp.ikonli.javafx.FontIcon;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Comparator;
-import java.util.Optional;
-
 
 public class MainView {
-    private FileModel project;
-    private TextArea fileContentArea;
+    private final BooleanProperty fileModified = new SimpleBooleanProperty(false);
+    private final StringProperty currentFileType = new SimpleStringProperty("");
 
-    private TextArea runtimeText;
+    private final FileModel project;
+    private TextArea contentArea, consoleArea;
 
     private TreeView<File> directoryTree;
 
     private ComboBox<String> fileComboBox;
+    private Button runButton;
     public MainView(FileModel project) {
         this.project = project;
     }
+
+    private boolean codeRunning;
+    private Path currentPath;
+    private String originalContent = ""; // 用于存储原始内容的变量
+    // 在文本更改监听器中比较当前内容和原始内容
+    private final ChangeListener<String> textChangeListener = (observable, oldValue, newValue) -> {
+        if (!newValue.equals(originalContent)) {
+            fileModified.set(true);
+        } else {
+            fileModified.set(false);
+        }
+    };
 
     public void display(Stage ownerStage) {
 
         Button newButton = new Button("New", new FontIcon(Feather.PLUS));
         Button projectButton = new Button("Project", new FontIcon(Feather.FOLDER));
 
-        Button runButton = new Button("Run", new FontIcon(Feather.PLAY));
+        runButton = new Button("Run", new FontIcon(Feather.PLAY));
         Button compileButton = new Button("Compile", new FontIcon(Feather.LAYERS));
         Button refreshButton = new Button("Refresh", new FontIcon(Feather.ROTATE_CCW));
         Button configButton = new Button("Config", new FontIcon(Feather.TOOL));
         Button menuButton = new Button("Menu", new FontIcon(Feather.MENU));
+        Button saveButton = new Button("Save", new FontIcon(Feather.SAVE));
 
-        refreshButton.setOnAction(e -> refreshDirectory(directoryTree.getSelectionModel().getSelectedItem()));
+        newButton.setOnAction(e-> createItem());
+        saveButton.setOnAction(e -> saveFile());
+        projectButton.setOnAction(e -> showinExplorer(directoryTree.getRoot()));
+        refreshButton.setOnAction(e -> refreshDirectory());
         runButton.setOnAction(e-> runProgram());
         compileButton.setOnAction(e -> compileProject());
         fileComboBox = new ComboBox<>();
         fileComboBox.setPrefWidth(200);
-        setCurrentFile(null);
+
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         ToolBar toolBar = new ToolBar(
-                newButton,projectButton,new Separator(Orientation.VERTICAL),
+                newButton,saveButton, projectButton,new Separator(Orientation.VERTICAL),
                 configButton,refreshButton,spacer,
                 fileComboBox,menuButton,compileButton,runButton
         );
-        fileContentArea = new TextArea();
-        fileContentArea.setEditable(false);
+        contentArea = new TextArea();
+        contentArea.setEditable(false);
+        contentArea.textProperty().addListener((observable, oldValue, newValue) -> {
+            fileModified.set(true);
+        });
+
+        contentArea.textProperty().addListener(textChangeListener);
+
+
+
 
         createTree();
+        openFile();
         SplitPane runtimePane = new SplitPane();
         runtimePane.setOrientation(Orientation.VERTICAL);
-        runtimePane.setDividerPositions(0.8);
-        SplitPane projectPane = new SplitPane(directoryTree,fileContentArea);
+        runtimePane.setDividerPositions(0.7);
+        SplitPane projectPane = new SplitPane(directoryTree,contentArea);
         projectPane.setOrientation(Orientation.HORIZONTAL);
         projectPane.setDividerPositions(0.2);
-        runtimeText = new TextArea(("Java Runtime Version: " + System.getProperty("java.runtime.version") + "\n"));
-        runtimePane.getItems().addAll(projectPane, runtimeText);
+        consoleArea = new TextArea(RuntimeController.getJVMInfo() + "\n");
+        consoleArea.setEditable(false);
+        TextField inputField = new TextField();
+        inputField.setPromptText("Enter command or input...");
+        inputField.setOnAction(event -> {
+            String inputText = inputField.getText();
+            RuntimeController.redirectToProcess(inputText);
+            consoleArea.appendText(inputText + "\n");
+            inputField.clear();
+        });
+        BorderPane consolePane = new BorderPane();
+        consolePane.setCenter(consoleArea);
+        consolePane.setBottom(inputField);
+
+        runtimePane.getItems().addAll(projectPane, consolePane);
 
         BorderPane borderPane = new BorderPane();
-//        borderPane.setTop(hbox);
         borderPane.setTop(toolBar);
         borderPane.setCenter(runtimePane);
-        Scene scene = new Scene(borderPane, 1000, 800);
 
-
-        Stage stage = new Stage();
-        stage.setScene(scene);
-        stage.setTitle("Project: " + project.fileName() + " [" + project.filePath() + "]");
-        stage.setOnShown(windowEvent -> ownerStage.close());
+        Stage stage = getStage(ownerStage, borderPane);
         stage.show();
 
     }
 
-    private void openFile(File file) {
-        try {
-            String content = null;
-            if (file.getName().endsWith(".class")) {
-                content = RuntimeController.deCompile(file.getAbsolutePath());
-            } else {
-                content = Files.readString(file.toPath());
+    private Stage getStage(Stage ownerStage, BorderPane borderPane) {
+        Scene scene = new Scene(borderPane, 1000, 800);
+
+        Stage stage = new Stage();
+        stage.setScene(scene);
+
+        stage.setTitle("Project: " + project.fileName() + " [" + project.filePath() + "]");
+        stage.setOnShown(windowEvent -> ownerStage.close());
+        stage.setOnCloseRequest(event -> {
+            if (fileModified.get()) {
+                // 提示用户保存更改或自动保存
+                saveFile(); // 根据需要调整逻辑
             }
-            fileContentArea.setText(content);
-            fileContentArea.setEditable(true); // 根据需求调整是否允许编辑
-        } catch (Exception e) {
-            fileContentArea.setText(e.getClass() + "Error reading file: " + e.getMessage());
-            System.out.println(e.getMessage());
+            try {
+                ProjectController.saveCustomizeModel(null);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+        return stage;
+    }
+
+    private void openFile() {
+        if (fileModified.get()) {
+            comfirmAndSave(); // 如果文件被修改，提示用户保存
         }
+
+        contentArea.setEditable(false);
+        contentArea.textProperty().removeListener(textChangeListener);
+
+        FileModel fileModel = ProjectController.loadCurrentFile(project);
+        fileComboBox.setValue(fileModel.fileName());
+        TreeItem<File> selectedItem = directoryTree.getSelectionModel().getSelectedItem();
+
+        File selectFile = selectedItem != null ? selectedItem.getValue() : new File(fileModel.filePath());
+
+        if (selectFile.isDirectory()) {
+            refreshDirectory(selectFile);
+            contentArea.setText("You are browsing FilePath: " + selectFile.getAbsolutePath());
+        } else {
+            selectTreeItem(directoryTree, selectFile);
+            String fileName = selectFile.getName();
+            currentFileType.set(fileName.substring(fileName.lastIndexOf('.') + 1));
+            if (fileName.endsWith(".class")) {
+                contentArea.setText(RuntimeController.deCompile(selectFile.getAbsolutePath()));
+            } else {
+                if (fileName.endsWith(".java")) {
+                    fileComboBox.setValue(fileName);
+                    ProjectController.setCurrentFile(selectFile);
+                }
+                contentArea.setEditable(true);
+                try {
+                    currentPath = selectFile.toPath();
+                    String content = Files.readString(currentPath);
+                    originalContent = content;
+                    contentArea.setText(content);
+                    fileModified.set(false);
+                } catch (IOException e) {
+                    contentArea.setText("Error reading file: " + selectFile.getAbsolutePath() +"\n\n" + e);
+                    currentPath = null;
+                    contentArea.setEditable(false);
+                }
+            }
+        }
+        contentArea.textProperty().addListener(textChangeListener);
+        fileModified.set(false); // 重新添加监听器后重置文件修改状态
+
     }
 
     private void createTree() {
@@ -127,7 +220,6 @@ public class MainView {
                     } else {
                         String fileName = item.getName();
                         setText(fileName);
-                        // 设置图标示例，实际应用中需要调整图标资源
                         if (item.isDirectory()) {
                             setGraphic(new FontIcon(Feather.FOLDER));
                         } else {
@@ -141,11 +233,13 @@ public class MainView {
                 }
             };
             ContextMenu contextMenu = ContextMenuBuilder.create()
-                    .addMenuItem("New", this::createItem)
+                    .addMenuItem("open", this::openFile)
+                    .addSeperate()
                     .addMenuItem("Copy", this::copyFile)
                     .addMenuItem("Paste", this::pasteFile)
                     .addMenuItem("Delete", this::deleteFile)
-                    .addMenuItem("Refresh",(() ->refreshDirectory(directoryTree.getSelectionModel().getSelectedItem())))
+                    .addSeperate()
+                    .addMenuItem("Refresh",this::refreshDirectory)
                     .addMenuItem("Show in Explorer", this::showinExplorer)
                     .build();
 
@@ -153,23 +247,13 @@ public class MainView {
                     Bindings.when(cell.emptyProperty()).then((ContextMenu)null).otherwise(contextMenu)
             );
 
-//            cell.setContextMenu(contextMenu);
             return cell;
         });
 
         directoryTree.setOnMouseClicked(event -> {
             if (event.getClickCount() == 2 && event.getButton() == MouseButton.PRIMARY) {
-                fileContentArea.setEditable(false);
-                TreeItem<File> selectedItem = directoryTree.getSelectionModel().getSelectedItem();
-                File selectFile = selectedItem.getValue();
-                if (selectFile.isDirectory()) {
-                    refreshDirectory(selectedItem);
-                    fileContentArea.setText("You are browsing FilePath: " + selectFile.getAbsolutePath());
-                } else {
-                    openFile(selectFile);
-                    setCurrentFile(selectFile);
-                }
-
+                comfirmAndSave();
+                openFile();
             }
         });
 
@@ -200,46 +284,91 @@ public class MainView {
         return parent;
     }
 
-    private void refreshDirectory(TreeItem<File> directoryItem) {
-        if (directoryItem == null) {
-            directoryItem = directoryTree.getSelectionModel().getSelectedItem();
-            if (directoryItem == null || directoryItem.getParent() == null) {
-                directoryItem = directoryTree.getRoot();
+    private void comfirmAndSave() {
+        if (fileModified.get()) {
+            if ("java".equals(currentFileType.get())) {
+                saveFile(); // 直接保存 .java 文件
             } else {
-                directoryItem = directoryItem.getParent();
+                // 对于非 .java 文件，可能需要用户确认是否保存
+                boolean confirmSave = DialogView.comfirmOperation("Do you want to save the modified file?");
+                if (confirmSave) {
+                    saveFile(); // 用户确认后保存
+                }
             }
         }
+    }
+    private void selectTreeItem(TreeView<File> treeView, File file) {
+        TreeItem<File> root = directoryTree.getRoot();
+        TreeItem<File> foundItem = findTreeItem(root, file);
 
-        File directory = directoryItem.getValue();
-        if (directory.isDirectory()) {
-            directoryItem.getChildren().clear();
-            TreeItem<File> newScannedItem  = scan(directory, 2);
-            directoryItem.getChildren().addAll(newScannedItem.getChildren());
+        if (foundItem != null) {
+            treeView.getSelectionModel().select(foundItem);
         }
     }
 
-    private void compileProject() {
+    private TreeItem<File> findTreeItem(TreeItem<File> root, File file) {
+        if (root == null || file == null) {
+            return null;
+        }
+
+        if (root.getValue().getAbsolutePath().equals(file.getAbsolutePath())) {
+            return root;
+        }
+
+        for (TreeItem<File> child : root.getChildren()) {
+            TreeItem<File> found = findTreeItem(child, file);
+            if (found != null) {
+                return found;
+            }
+        }
+
+        return null;
+    }
+    private void refreshDirectory() {
+        refreshDirectory(directoryTree.getSelectionModel().getSelectedItem().getValue());
+        DialogView.operationResult("Refresh successfully");
+    }
+
+    private void refreshDirectory(File directory) {
+        if (directory == null) {
+            directory = directoryTree.getRoot().getValue();
+        }
+
+        TreeItem<File> refreshItem = findTreeItem(directoryTree.getRoot(), directory);
+        if (!directory.isDirectory()) refreshItem = refreshItem.getParent();
+
+        refreshItem.getChildren().clear();
+        TreeItem<File> newScannedItem  = scan(directory, 2);
+        refreshItem.getChildren().addAll(newScannedItem.getChildren());
+        selectTreeItem(directoryTree, directory);
+    }
+
+    private boolean compileProject() {
         try {
+            saveFile();
+            consoleArea.appendText("Start to compile project files...");
             if (RuntimeController.buildProject(project.filePath())) {
-                refreshDirectory(directoryTree.getRoot());
+                refreshDirectory(null);
+                consoleArea.appendText("Compile success\n");
+                return true;
             }
         } catch (Exception e) {
             DialogView.alertException("Fail to Compile Project", e);
         }
-
+        return false;
     }
     private void deleteFile(){
         TreeItem<File> selectedItem = directoryTree.getSelectionModel().getSelectedItem();
         if (selectedItem != null) {
             File deletePath = selectedItem.getValue();
-            boolean comfirmDelete = DialogView.comfirmDelete(deletePath.getAbsolutePath());
+            boolean comfirmDelete = DialogView.comfirmOperation("Do you want to delete file: " + deletePath.getAbsolutePath() + " ?");
             if (comfirmDelete) {
                 if (deletePath.exists() && ProjectController.deleteFiles(deletePath)) {
                     TreeItem<File> parentItem = selectedItem.getParent();
                     if (parentItem != null) {
-                        refreshDirectory(parentItem);
+                        refreshDirectory(parentItem.getValue());
                     } else {
-                        refreshDirectory(directoryTree.getRoot());
+                        refreshDirectory(null);
                     }
                 } else {
                     Alert errorAlert = new Alert(Alert.AlertType.ERROR, "File could not be deleted.", ButtonType.OK);
@@ -256,27 +385,91 @@ public class MainView {
         } catch (IOException e) {
             DialogView.alertException("Error",e);
         } finally {
-            refreshDirectory(selectedItem);
+            refreshDirectory(selectedItem.getValue());
         }
     }
 
-    private void setCurrentFile(File file) {
-        String currentFileName = ProjectController.loadCurrentFile(project);
-        if (file == null || !file.getName().endsWith(".java")) {
-            fileComboBox.setValue(currentFileName);
-        } else {
-            fileComboBox.setValue(file.getName());
-            ProjectController.setCurrentFile(file);
-        }
-    }
     private void copyFile(){
         TreeItem<File> selectedItem = directoryTree.getSelectionModel().getSelectedItem();
         ProjectController.copyFile(selectedItem.getValue());
     }
-    private void createItem(){}
+    private void createItem() {
+        Stage stage = new Stage();
+        TabPane tabPane = new TabPane();
+
+        Tab newFileTab = new Tab("New File");
+        newFileTab.setClosable(false);
+
+        TextField fileNameField = new TextField();
+        fileNameField.setPromptText("Enter file name");
+
+        String projectPath = ProjectController.getProjectPath();
+        VBox vbox = createNewFileLayout(projectPath, stage, fileNameField);
+        vbox.setPadding(new Insets(10));
+        vbox.setAlignment(Pos.CENTER);
+
+        newFileTab.setContent(vbox);
+        tabPane.getTabs().add(newFileTab);
+
+        Scene scene = new Scene(tabPane, 400, 300);
+        stage.setScene(scene);
+        stage.setTitle("Create New File");
+        stage.show();
+
+    }
+
+    private VBox createNewFileLayout(String projectPath, Stage stage, TextField fileNameField) {
+        Label directoryLabel = new Label(projectPath);
+
+        Button chooseDirectoryButton = new Button("Choose Directory");
+        chooseDirectoryButton.setOnAction(e -> {
+            DirectoryChooser directoryChooser = new DirectoryChooser();
+            directoryChooser.setTitle("Select Folder");
+            directoryChooser.setInitialDirectory(new File(projectPath));
+            File selectedDirectory = directoryChooser.showDialog(stage);
+
+            if (selectedDirectory != null) {
+                directoryLabel.setText(selectedDirectory.getAbsolutePath());
+            }
+        });
+
+        Button createButton = new Button("Create");
+        createButton.setOnAction(event -> createFile(directoryLabel.getText(),fileNameField.getText(), stage));
+
+        VBox vbox = new VBox(10, directoryLabel, chooseDirectoryButton, fileNameField, createButton);
+        return vbox;
+    }
+
+    private void createFile(String path, String fileName, Stage stage) {
+        // 假设所有文件都创建在项目根目录下
+        File rootDir = new File(path);
+        File newFile = new File(rootDir, fileName);
+
+        try {
+            boolean created = newFile.createNewFile();
+            if (created) {
+                Platform.runLater(() -> {
+                    refreshDirectory(rootDir); // 刷新目录以显示新文件
+                    selectTreeItem(directoryTree, newFile); // 选择新创建的文件
+                });
+                stage.close(); // 关闭创建文件的窗口
+            } else {
+                // 文件创建失败的处理
+                Alert alert = new Alert(Alert.AlertType.ERROR, "File creation failed.");
+                alert.showAndWait();
+            }
+        } catch (IOException e) {
+            Alert alert = new Alert(Alert.AlertType.ERROR, "An error occurred: " + e.getMessage());
+            alert.showAndWait();
+        }
+    }
 
     private void showinExplorer() {
-        TreeItem<File> selectedItem = directoryTree.getSelectionModel().getSelectedItem();
+        TreeItem<File> currentItem = directoryTree.getSelectionModel().getSelectedItem();
+        showinExplorer(currentItem);
+    }
+
+    private void showinExplorer(TreeItem<File> selectedItem) {
         if (selectedItem != null && selectedItem.getValue() != null) {
             try {
                 ProjectController.showinExplorer(selectedItem.getValue());
@@ -285,15 +478,44 @@ public class MainView {
             }
         }
     }
-    private void runProgram() {
-        compileProject();
-        new Thread(() -> {
-            ExecutionResult res = RuntimeController.executeCode(directoryTree.getSelectionModel().getSelectedItem().getValue().getAbsolutePath(), "java", "Main", runtimeText::appendText);
-            if (res.exitCode() != 0) {
-                runtimeText.appendText(res.output());
-            }
-            runtimeText.appendText("\nProcess finished with exit code "+ res.exitCode() + "\n");
 
-        }).start();
+    private void saveFile() {
+        try {
+            ProjectController.saveContext(contentArea.getText(), currentPath);
+            fileModified.set(false);
+        } catch (IOException e) {
+            DialogView.alertException("Error saving file" + currentPath.toString(),e);
+        }
     }
+    private void runProgram() {
+        if (!codeRunning) {
+            if (compileProject()) {
+                new Thread(() -> {
+                    Platform.runLater(() -> {
+                        runButton.setText("Stop");
+                        runButton.setGraphic(new FontIcon(Feather.SQUARE));
+                    });
+                    codeRunning = true;
+                    FileModel fileModel = ProjectController.loadCurrentFile(project);
+                    ExecutionResult res = RuntimeController.executeCode(project.filePath(), fileModel, consoleArea::appendText);
+                    if (res.exitCode() != 0) {
+                        consoleArea.appendText(res.output());
+                    }
+                    Platform.runLater(() -> {
+                        consoleArea.appendText("\nProcess finished with exit code " + res.exitCode() + "\n");
+                        runButton.setText("Run");
+                        runButton.setGraphic(new FontIcon(Feather.PLAY));
+                        codeRunning = false;
+                    });
+                }).start();
+            } else {
+                openFile();
+                DialogView.operationResult("Fail to compile your project");
+            }
+        } else {
+            RuntimeController.stopProcess();
+            codeRunning = false;
+        }
+    }
+
 }

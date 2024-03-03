@@ -9,6 +9,7 @@ import javafx.scene.input.ClipboardContent;
 import java.awt.Desktop;
 import java.io.*;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Collections;
 import java.util.List;
@@ -16,8 +17,7 @@ import java.util.List;
 public class ProjectController {
 
     private static String configFile;
-
-    private static FileModel currentFile;
+    private static CustomizeModel customizeModel;
 
     public static void copyFile(File path) {
         Clipboard clipboard = Clipboard.getSystemClipboard();
@@ -28,26 +28,37 @@ public class ProjectController {
         clipboard.setContent(content);
     }
 
-    public static String loadCurrentFile(FileModel model) {
+    public static String getProjectPath() {
+        return new File(configFile).getParent();
+    }
+    public static FileModel loadCurrentFile(FileModel model) {
         if (configFile == null) {
             configFile = model.filePath() + File.separator + ".idefx";
+            try (FileInputStream fileIn = new FileInputStream(configFile);
+                 ObjectInputStream in = new ObjectInputStream(fileIn)) {
+                customizeModel = (CustomizeModel) in.readObject();
+            } catch (FileNotFoundException e) {
+                throw new RuntimeException(e);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            } catch (ClassNotFoundException e) {
+                throw new RuntimeException(e);
+            }
         }
-        try (FileInputStream fileIn = new FileInputStream(configFile);
-             ObjectInputStream in = new ObjectInputStream(fileIn)) {
-            currentFile = (FileModel) in.readObject();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-        return currentFile.fileName();
+        return customizeModel.getCurrentFile();
     }
 
 
     private ProjectController(){}
     public static void setCurrentFile(File file) {
-        currentFile = new FileModel(file.getName(), file.getAbsolutePath());
+        customizeModel.setCurrentFile(new FileModel(file.getName(), file.getAbsolutePath()));
     }
     public static void showinExplorer(File file) throws IOException {
-        Desktop.getDesktop().open(file.getParentFile());
+        if (file.isDirectory()) {
+            Desktop.getDesktop().open(file);
+        } else {
+            Desktop.getDesktop().open(file.getParentFile());
+        }
     }
 
     public static FileModel createProject(ProjectConfig configure) throws IOException {
@@ -64,24 +75,24 @@ public class ProjectController {
                     writer.write(defaultMainCode());
                 }
             }
-            saveCurrentFile(currentFile);
+            saveCustomizeModel(currentFile);
         } else {
             throw new IOException("Fail to create project path");
         }
         return new FileModel(configure.name(), dir.getAbsolutePath());
     }
-    public static CustomizeModel initProjectInfo(String rootPath) {
-        File file = new File(rootPath, ".idefx");
-        //TODO 完善初始化逻辑
-        return null;
-    }
 
-
-    public static void saveCurrentFile(FileModel currentFile) throws IOException {
+    public static void saveCustomizeModel(FileModel file) throws IOException {
+        if (file != null) customizeModel = new CustomizeModel(file);
         try (FileOutputStream fileOut = new FileOutputStream(configFile);
              ObjectOutputStream out = new ObjectOutputStream(fileOut)) {
-            out.writeObject(currentFile);
+            out.writeObject(customizeModel);
         }
+    }
+
+    public static void saveContext(String content, Path filePath) throws IOException {
+        if (filePath == null) throw new IOException("Can only save java files");
+        Files.write(filePath, content.getBytes());
     }
     public static List<File> getFilesFromClipboard() {
         Clipboard clipboard = Clipboard.getSystemClipboard();
@@ -97,6 +108,16 @@ public class ProjectController {
         if (filesToPaste != null && targetDirectory.isDirectory()) {
             for (File file : filesToPaste) {
                 File destFile = new File(targetDirectory, file.getName());
+                // 处理重名文件
+                int count = 1;
+                String fileName = file.getName();
+                String baseName = fileName.substring(0, fileName.lastIndexOf('.'));
+                String extension = fileName.substring(fileName.lastIndexOf('.'));
+                while (destFile.exists()) {
+                    String newFileName = baseName + "_" + count + extension;
+                    destFile = new File(targetDirectory, newFileName);
+                    count++;
+                }
                 Files.copy(file.toPath(), destFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
             }
         }
@@ -124,7 +145,9 @@ public class ProjectController {
             }
         }
 
+        // 删除文件夹本身
         return directory.delete();
     }
 
 }
+
