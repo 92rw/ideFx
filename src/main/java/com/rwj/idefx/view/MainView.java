@@ -1,5 +1,6 @@
 package com.rwj.idefx.view;
 
+import com.rwj.idefx.FontsManager;
 import com.rwj.idefx.controller.ProjectController;
 import com.rwj.idefx.controller.RuntimeController;
 import com.rwj.idefx.model.ExecutionResult;
@@ -18,7 +19,6 @@ import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.input.MouseButton;
 import javafx.scene.layout.*;
-import javafx.scene.text.Text;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
 
@@ -89,6 +89,7 @@ public class MainView {
                 fileComboBox,menuButton,compileButton,runButton
         );
         contentArea = new TextArea();
+        contentArea.setFont(FontsManager.JET_BRAINS_MONO_MEDIUM);
         contentArea.setEditable(false);
         contentArea.textProperty().addListener((observable, oldValue, newValue) -> {
             fileModified.set(true);
