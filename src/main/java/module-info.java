@@ -6,6 +6,9 @@ module com.rwj.idefx {
     requires org.kordamp.ikonli.javafx;
     requires org.kordamp.ikonli.feather;
     requires atlantafx.base;
+    requires org.fxmisc.richtext;
+    requires org.fxmisc.flowless;
+    requires reactfx;
 
     opens com.rwj.idefx to javafx.fxml;
     exports com.rwj.idefx.controller;

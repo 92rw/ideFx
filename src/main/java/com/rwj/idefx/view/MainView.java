@@ -1,6 +1,6 @@
 package com.rwj.idefx.view;
 
-import com.rwj.idefx.FontsManager;
+import com.rwj.idefx.JavaSyntaxHighlighter;
 import com.rwj.idefx.controller.ProjectController;
 import com.rwj.idefx.controller.RuntimeController;
 import com.rwj.idefx.model.ExecutionResult;
@@ -15,13 +15,19 @@ import javafx.beans.value.ChangeListener;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
 import javafx.scene.layout.*;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
 
+import org.fxmisc.richtext.CodeArea;
+import org.fxmisc.richtext.LineNumberFactory;
+import org.fxmisc.richtext.util.UndoUtils;
 import org.kordamp.ikonli.feather.Feather;
 import org.kordamp.ikonli.javafx.FontIcon;
 
@@ -30,13 +36,17 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.function.IntFunction;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class MainView {
     private final BooleanProperty fileModified = new SimpleBooleanProperty(false);
     private final StringProperty currentFileType = new SimpleStringProperty("");
 
     private final FileModel project;
-    private TextArea contentArea, consoleArea;
+    private TextArea consoleArea;
+    private CodeArea codeArea;
 
     private TreeView<File> directoryTree;
 
@@ -88,16 +98,8 @@ public class MainView {
                 configButton,refreshButton,spacer,
                 fileComboBox,menuButton,compileButton,runButton
         );
-        contentArea = new TextArea();
-        contentArea.setFont(FontsManager.JET_BRAINS_MONO_MEDIUM);
-        contentArea.setEditable(false);
-        contentArea.textProperty().addListener((observable, oldValue, newValue) -> {
-            fileModified.set(true);
-        });
 
-        contentArea.textProperty().addListener(textChangeListener);
-
-
+        initCodeArea();
 
 
         createTree();
@@ -105,7 +107,7 @@ public class MainView {
         SplitPane runtimePane = new SplitPane();
         runtimePane.setOrientation(Orientation.VERTICAL);
         runtimePane.setDividerPositions(0.7);
-        SplitPane projectPane = new SplitPane(directoryTree,contentArea);
+        SplitPane projectPane = new SplitPane(directoryTree, codeArea);
         projectPane.setOrientation(Orientation.HORIZONTAL);
         projectPane.setDividerPositions(0.2);
         consoleArea = new TextArea(RuntimeController.getJVMInfo() + "\n");
@@ -131,6 +133,56 @@ public class MainView {
         Stage stage = getStage(ownerStage, borderPane);
         stage.show();
 
+    }
+
+    private void initCodeArea() {
+        codeArea = new CodeArea();
+
+        IntFunction<Node> noFactory = LineNumberFactory.get(codeArea);
+        IntFunction<Node> graphicFactory = line -> {
+            HBox lineBox = new HBox(noFactory.apply(line));
+            lineBox.getStyleClass().add("lineno-box");
+            lineBox.setAlignment(Pos.CENTER_LEFT);
+            return lineBox;
+        };
+
+        var um = UndoUtils.plainTextUndoManager(codeArea);
+        codeArea.setUndoManager(um);
+        new JavaSyntaxHighlighter().start(codeArea);
+
+        // auto-indent
+        codeArea.addEventHandler( KeyEvent.KEY_PRESSED, KE -> {
+            if ( KE.getCode() == KeyCode.ENTER && !KE.isControlDown()) indent(codeArea);
+        });
+
+        // auto-close brackets
+        codeArea.setOnKeyTyped(keyEvent -> {
+            String str = keyEvent.getCharacter().equals("{") ? "}" :
+                    keyEvent.getCharacter().equals("[") ? "]" :
+                            keyEvent.getCharacter().equals("(") ? ")" :
+                                    keyEvent.getCharacter().equals("\"") ? "\"" :
+                                            keyEvent.getCharacter().equals("'") ? "'" : null;
+            if (str==null) return;
+            codeArea.insertText(codeArea.getCaretPosition(), str);
+            codeArea.getCaretSelectionBind().moveTo(codeArea.getCaretPosition()-1);
+        });
+
+        codeArea.setEditable(false);
+        codeArea.textProperty().addListener((observable, oldValue, newValue) -> {
+            fileModified.set(true);
+        });
+        codeArea.setParagraphGraphicFactory(graphicFactory);
+        codeArea.getStylesheets().add(String.valueOf(getClass().getResource("/themes/dracula.css")));
+        codeArea.textProperty().addListener(textChangeListener);
+        codeArea.requestFocus();
+    }
+
+    public void indent(CodeArea area) {
+        final Pattern whiteSpace = Pattern.compile( "^\\s+" );
+        int caretPosition = area.getCaretPosition();
+        int currentParagraph = area.getCurrentParagraph();
+        Matcher m0 = whiteSpace.matcher( area.getParagraph( currentParagraph-1 ).getSegments().get( 0 ) );
+        if ( m0.find() ) area.insertText( caretPosition, m0.group());
     }
 
     private Stage getStage(Stage ownerStage, BorderPane borderPane) {
@@ -160,8 +212,8 @@ public class MainView {
             comfirmAndSave(); // 如果文件被修改，提示用户保存
         }
 
-        contentArea.setEditable(false);
-        contentArea.textProperty().removeListener(textChangeListener);
+        codeArea.setEditable(false);
+        codeArea.textProperty().removeListener(textChangeListener);
 
         FileModel fileModel = ProjectController.loadCurrentFile(project);
         fileComboBox.setValue(fileModel.fileName());
@@ -171,33 +223,33 @@ public class MainView {
 
         if (selectFile.isDirectory()) {
             refreshDirectory(selectFile);
-            contentArea.setText("You are browsing FilePath: " + selectFile.getAbsolutePath());
+            codeArea.replaceText("You are browsing FilePath: " + selectFile.getAbsolutePath());
         } else {
             selectTreeItem(directoryTree, selectFile);
             String fileName = selectFile.getName();
             currentFileType.set(fileName.substring(fileName.lastIndexOf('.') + 1));
             if (fileName.endsWith(".class")) {
-                contentArea.setText(RuntimeController.deCompile(selectFile.getAbsolutePath()));
+                codeArea.replaceText(RuntimeController.deCompile(selectFile.getAbsolutePath()));
             } else {
                 if (fileName.endsWith(".java")) {
                     fileComboBox.setValue(fileName);
                     ProjectController.setCurrentFile(selectFile);
                 }
-                contentArea.setEditable(true);
+                codeArea.setEditable(true);
                 try {
                     currentPath = selectFile.toPath();
                     String content = Files.readString(currentPath);
                     originalContent = content;
-                    contentArea.setText(content);
+                    codeArea.replaceText(content);
                     fileModified.set(false);
                 } catch (IOException e) {
-                    contentArea.setText("Error reading file: " + selectFile.getAbsolutePath() +"\n\n" + e);
+                    codeArea.replaceText("Error reading file: " + selectFile.getAbsolutePath() +"\n\n" + e);
                     currentPath = null;
-                    contentArea.setEditable(false);
+                    codeArea.setEditable(false);
                 }
             }
         }
-        contentArea.textProperty().addListener(textChangeListener);
+        codeArea.textProperty().addListener(textChangeListener);
         fileModified.set(false); // 重新添加监听器后重置文件修改状态
 
     }
@@ -482,7 +534,7 @@ public class MainView {
 
     private void saveFile() {
         try {
-            ProjectController.saveContext(contentArea.getText(), currentPath);
+            ProjectController.saveContext(codeArea.getText(), currentPath);
             fileModified.set(false);
         } catch (IOException e) {
             DialogView.alertException("Error saving file" + currentPath.toString(),e);
