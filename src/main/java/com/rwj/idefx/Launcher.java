@@ -7,6 +7,7 @@ import javafx.application.Application;
 public class Launcher {
     public static void main(String[] args) {
         ApplicationController.loadAppConfig();
+        FontLoader.load();
         Application.launch(StartView.class, args);
     }
 }
