@@ -49,6 +49,11 @@
     -fx-background-color: #272822;
 }
 
+.context-menu {
+    -fx-font-family: system; /* 使用系统默认字体 */
+    -fx-font-size: 15; /* 设置期望的字体大小 */
+}
+
 .styled-text-area {
     -fx-font-size: 15px;
     -fx-font-family: 'JetBrains Mono Medium' !important;

@@ -19,6 +19,7 @@ import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyCodeCombination;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
 import javafx.scene.layout.*;
@@ -40,6 +41,8 @@ import java.util.function.IntFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static javafx.scene.input.KeyCombination.CONTROL_DOWN;
+
 public class MainView {
     private final BooleanProperty fileModified = new SimpleBooleanProperty(false);
     private final StringProperty currentFileType = new SimpleStringProperty("");
@@ -52,8 +55,10 @@ public class MainView {
 
     private ComboBox<String> fileComboBox;
     private Button runButton;
-    public MainView(FileModel project) {
+    private String projectTheme;
+    public MainView(FileModel project, String theme) {
         this.project = project;
+        this.projectTheme = theme;
     }
 
     private boolean codeRunning;
@@ -172,9 +177,23 @@ public class MainView {
             fileModified.set(true);
         });
         codeArea.setParagraphGraphicFactory(graphicFactory);
-        codeArea.getStylesheets().add(String.valueOf(getClass().getResource("/themes/dracula.css")));
+        setCodeAreaTheme();
         codeArea.textProperty().addListener(textChangeListener);
         codeArea.requestFocus();
+
+        ContextMenu contextMenu = ContextMenuBuilder.create().
+                addMenuItem("_Undo", Feather.CORNER_DOWN_LEFT,
+                        new KeyCodeCombination(KeyCode.Z, CONTROL_DOWN), true, () -> codeArea.undo()).
+                addMenuItem("_Redo", Feather.CORNER_DOWN_RIGHT,
+                        new KeyCodeCombination(KeyCode.Y, CONTROL_DOWN), true, () -> codeArea.redo()).
+                addSeperate().
+                addMenuItem("Cut", Feather.SCISSORS, new KeyCodeCombination(KeyCode.X, CONTROL_DOWN), false, () -> codeArea.cut()).
+                addMenuItem("Copy", Feather.COPY, new KeyCodeCombination(KeyCode.C, CONTROL_DOWN), false, () -> codeArea.copy()).
+                addMenuItem("Paste", Feather.CLIPBOARD, new KeyCodeCombination(KeyCode.V, CONTROL_DOWN), false, () -> codeArea.paste()).
+                addSeperate().
+                addMenuItem("Select All", null, null, null, () -> codeArea.selectAll()).
+                build();
+        codeArea.setContextMenu(contextMenu);
     }
 
     public void indent(CodeArea area) {
@@ -571,4 +590,11 @@ public class MainView {
         }
     }
 
+    private void setCodeAreaTheme() {
+        if (projectTheme.equals("Dracula") || projectTheme.equals("Nord Dark")) {
+            codeArea.getStylesheets().add(String.valueOf(getClass().getResource("/themes/codearea/dracula.css")));
+        } else if (projectTheme.endsWith("Dark")) {
+            codeArea.getStylesheets().add(String.valueOf(getClass().getResource("/themes/codearea/monokai.css")));
+        }
+    }
 }
