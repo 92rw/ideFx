@@ -90,7 +90,7 @@ public class StartView extends Application {
 
     private void enterProject(FileModel project){
         ApplicationController.addProject(project);
-        new MainView(project).display(primaryStage);
+        new MainView(project, ApplicationController.currentTheme()).display(primaryStage);
     }
 
     private Scene createScene1() {

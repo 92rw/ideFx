@@ -8,6 +8,9 @@ import javafx.application.Platform;
 
 import java.io.*;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Scanner;
 import java.util.function.Consumer;
 
@@ -15,11 +18,10 @@ import java.util.function.Consumer;
 public class RuntimeController {
     private static OSType os = getOperatingSystem();
     private static Process currentProcess = null;
-
+    private static ProcessBuilder processBuilder = new ProcessBuilder();
     private static String javaPath = "java";
 
-
-    private static OSType getOperatingSystem() {
+    public static OSType getOperatingSystem() {
         String osName = System.getProperty("os.name").toLowerCase();
         if (osName.contains("win")) {
             return OSType.WINDOWS;
@@ -41,23 +43,24 @@ public class RuntimeController {
     }
 
     public static boolean buildProject(String projectPath) throws InterruptedException {
-        String[] command;
+        List<String> command;
         if (os == OSType.WINDOWS) {
-            command = new String[]{
+            command = Arrays.asList(
                     "cmd", "/C",
                     "cd", projectPath, "&",
                     "dir", "*.java", "/s", "/b", ">", projectPath + "/.list",
-                    "&", "javac", "-s", projectPath, "-d", projectPath + "/out", "@" + projectPath + "/.list"
-            };
+                    "&", javaPath, "-s", projectPath, "-d", projectPath + "/out", "@" + projectPath + "/.list"
+            );
         } else {
-            command = new String[]{
+            command = Arrays.asList(
                     "bash", "-c",
                     "find", projectPath + "/src", "-name", "'*.java'", "|",
-                    "xargs", "javac", "-s", projectPath, "-d", projectPath + "/out"
-            };
+                    "xargs", javaPath, "-s", projectPath, "-d", projectPath + "/out"
+            );
         }
 
-        Process process = runCommand(false,command);
+        Process process = runCommand(false, command);
+
         int exitCode = process.waitFor();
         if (os == OSType.WINDOWS) {
             runCommand(false,"cmd", "/C", "del", projectPath + "/.list");
@@ -67,7 +70,22 @@ public class RuntimeController {
 
     private static Process runCommand(boolean mergeErrorStream, String... command) {
         try {
-            ProcessBuilder processBuilder = new ProcessBuilder(command);
+            List<String> fullCommand = new ArrayList<>(command.length + 1);
+            fullCommand.add(javaPath);
+            fullCommand.addAll(Arrays.asList(command));
+
+            processBuilder.command(fullCommand);
+            processBuilder.redirectErrorStream(mergeErrorStream);
+            return processBuilder.start();
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    private static Process runCommand(boolean mergeErrorStream, List<String> fullCommand) {
+        try {
+            processBuilder.command(fullCommand);
             processBuilder.redirectErrorStream(mergeErrorStream);
             return processBuilder.start();
         } catch (IOException e) {
@@ -86,9 +104,18 @@ public class RuntimeController {
         } catch (IOException e) {
             return new ExecutionResult(-1, "Fail to read java file");
         }
-        String className = packageName.isEmpty() ? filename.substring(0, filename.length() - ".java".length())
-                : packageName + "." + mainClass.fileName().replace(".java", "");
 
+//        String className = packageName.isEmpty() ? filename.substring(0, filename.length() - ".java".length())
+//                : packageName + "." + mainClass.fileName().replace(".java", "");
+        String relativePath = file.getAbsolutePath().substring(projectPath.length() + 1);
+        String classFileName = relativePath.substring(0, relativePath.length() - ".java".length()).replace('\\', '/');
+
+        String className;
+        if (packageName.isEmpty()) {
+            className = classFileName;
+        } else {
+            className = packageName + "." + classFileName;
+        }
         String classPath = projectPath + "/out";
 
         currentProcess = runCommand(true, javaPath, "-cp", classPath , className);
@@ -152,12 +179,14 @@ public class RuntimeController {
             String line;
             while ((line = reader.readLine()) != null) {
                 if (line.startsWith("package")) {
-                    // 格式通常为 "package com.example.package;"
-                    return line.substring(8, line.length() - 1).trim(); // 移除"package "和";"
+                    return line.substring(8, line.length() - 1).trim();
                 }
             }
         }
-        return ""; // 如果没有找到包声明，默认包（无包名）
+        return "";
     }
 
+    public static void setJavaPath(String path) {
+        javaPath = path;
+    }
 }
