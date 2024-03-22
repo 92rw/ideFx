@@ -595,6 +595,8 @@ public class MainView {
             codeArea.getStylesheets().add(String.valueOf(getClass().getResource("/themes/codearea/dracula.css")));
         } else if (projectTheme.endsWith("Dark")) {
             codeArea.getStylesheets().add(String.valueOf(getClass().getResource("/themes/codearea/monokai.css")));
+        } else {
+            codeArea.getStylesheets().add(String.valueOf(getClass().getResource("/themes/codearea/light.css")));
         }
     }
 }

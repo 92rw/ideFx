@@ -1,10 +1,11 @@
 <h1 align="center">Welcome to ideFx 👋</h1>
 <p>
-  <img alt="Version" src="https://img.shields.io/badge/version-0.1-blue.svg" />
+  <img alt="Version" src="https://img.shields.io/badge/version-0.2-blue.svg" />
   <a href="#Features"><img src="https://img.shields.io/badge/Java-21-red.svg" alt="JDK version"></a>
   <a href="#Features"><img src="https://img.shields.io/badge/OpenJFX-21-red.svg" alt="JavaFX version"></a>
   <a href="#Features"><img src="https://img.shields.io/github/license/92rw/ideFx" alt="License: GPL"></a>
 </p>
+
 > The ideFx project is a lightweight Integrated Development Environment (IDE) inspired by Intellij IDEA, designed to provide a user-friendly platform for Java developers. It provides essential features like project management, code editing, compilation, and execution, focusing on simplicity and efficiency.
 
 ### 🏠 [Homepage](https://github.com/92rw/ideFx#readme)
@@ -26,25 +27,21 @@
 
 - Customizable Themes: Personalize your development environment with selectable themes.
 
-    ![Theme-Nord Dark](https://github.com/92rw/StaticResources/blob/main/image/ArticleContents/ideFx/Theme-Dark.png?raw=true)
+    ![Theme-Cupertino Dark](https://github.com/92rw/StaticResources/blob/main/image/ArticleContents/ideFx/Theme-Dark2.png?raw=true)
 
-    ![Theme-Primer Light](https://github.com/92rw/StaticResources/blob/main/image/ArticleContents/ideFx/Theme-Light.png?raw=true)
+    ![Theme-Nord Light](https://github.com/92rw/StaticResources/blob/main/image/ArticleContents/ideFx/Theme-Light2.png?raw=true)
     
-    ![Theme-Dracula](https://github.com/92rw/StaticResources/blob/main/image/ArticleContents/ideFx/Theme-Purple.png?raw=true)
+    ![Theme-Dracula](https://github.com/92rw/StaticResources/blob/main/image/ArticleContents/ideFx/Theme-Purple2.png?raw=true)
 
 - Console Output: View your application's output and interact with it through the integrated console.
 
-![Console Output](https://github.com/92rw/StaticResources/blob/main/image/ArticleContents/ideFx/RuntimeTest.png?raw=true)
+![Console Output](https://github.com/92rw/StaticResources/blob/main/image/ArticleContents/ideFx/RuntimeTest2.png?raw=true)
 
 * Compile and decompile: Utilized command-line tools `javac` and `javap` for compiling `.java` files and decompiling `.class` files within the project
 
-![Decompile](https://github.com/92rw/StaticResources/blob/main/image/ArticleContents/ideFx/DeCompile.png?raw=true)
+![Decompile](https://github.com/92rw/StaticResources/blob/main/image/ArticleContents/ideFx/DeCompile2.png?raw=true)
 
 ## 📩 Getting Started
-
-Run from released package:
-
-[Release ideFx v0.1-alpha · 92rw/ideFx (github.com)](https://github.com/92rw/ideFx/releases/tag/v0.1-alpha)
 
 Compile whole project from other IDE:
 
@@ -54,12 +51,11 @@ git clone https://github.com/92rw/ideFx
 
 
 
-## 👨‍💻 Author
+## 👨‍💻 Contributer
 
-👤 **92rw**
+👤 **[92rw](https://github.com/92rw)**
 
-* Website: https://92rw.github.io/
-* Github: [@92rw](https://github.com/92rw)
+👤 **[MasterFlomaster1](https://github.com/MasterFlomaster1)**
 
 ## 🖱️ Show your support
 
