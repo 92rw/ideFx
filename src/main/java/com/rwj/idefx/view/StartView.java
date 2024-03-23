@@ -210,4 +210,8 @@ public class StartView extends Application {
                 .collect(Collectors.toList());
     }
 
+    public static void showStartView(Stage stage) {
+        StartView startView = new StartView();
+        startView.start(stage); // 重用已有的Stage
+    }
 }

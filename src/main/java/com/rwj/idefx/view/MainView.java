@@ -24,6 +24,7 @@ import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
 import javafx.scene.layout.*;
 import javafx.stage.DirectoryChooser;
+import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
 import org.fxmisc.richtext.CodeArea;
@@ -36,6 +37,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Comparator;
 import java.util.function.IntFunction;
 import java.util.regex.Matcher;
@@ -86,11 +88,16 @@ public class MainView {
         Button saveButton = new Button("Save", new FontIcon(Feather.SAVE));
 
         newButton.setOnAction(e-> createItem());
-        saveButton.setOnAction(e -> saveFile());
         projectButton.setOnAction(e -> showinExplorer(directoryTree.getRoot()));
-        refreshButton.setOnAction(e -> refreshDirectory());
         runButton.setOnAction(e-> runProgram());
         compileButton.setOnAction(e -> compileProject());
+        refreshButton.setOnAction(e -> refreshDirectory());
+        configButton.setOnAction(e -> projectConfig(ownerStage));
+        menuButton.setOnAction(e -> {
+            ownerStage.close();
+            StartView.showStartView(ownerStage);
+        });
+        saveButton.setOnAction(e -> saveFile());
         fileComboBox = new ComboBox<>();
         fileComboBox.setPrefWidth(200);
 
@@ -115,7 +122,8 @@ public class MainView {
         SplitPane projectPane = new SplitPane(directoryTree, codeArea);
         projectPane.setOrientation(Orientation.HORIZONTAL);
         projectPane.setDividerPositions(0.2);
-        consoleArea = new TextArea(RuntimeController.getJVMInfo() + "\n");
+        consoleArea = new TextArea();
+        consoleArea.appendText(RuntimeController.getJVMInfo() + "\n");
         consoleArea.setEditable(false);
         TextField inputField = new TextField();
         inputField.setPromptText("Enter command or input...");
@@ -599,4 +607,58 @@ public class MainView {
             codeArea.getStylesheets().add(String.valueOf(getClass().getResource("/themes/codearea/light.css")));
         }
     }
+
+    public void projectConfig(Stage currentStage) {
+        Dialog<String> dialog = new Dialog<>();
+        dialog.setTitle("Change JVM Version");
+        ButtonType confirmButtonType = new ButtonType("Confirm", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(confirmButtonType, ButtonType.CANCEL);
+
+        Button openFileChooserBtn = new Button("Choose File");
+        TextField filePathField = new TextField();
+        filePathField.setEditable(false);
+
+        openFileChooserBtn.setOnAction(event -> {
+            FileChooser fileChooser = new FileChooser();
+            fileChooser.setTitle("Select Java Runtime Environment");
+
+            if (RuntimeController.isWindowsOS()) {
+                fileChooser.getExtensionFilters().add(
+                        new FileChooser.ExtensionFilter("Executable Files", "*.exe")
+                );
+            } // 在Linux或macOS上，通常不需要设置扩展名过滤器
+
+            File selectedFile = fileChooser.showOpenDialog(currentStage);
+            if (selectedFile != null) {
+                File javaExe = RuntimeController.getJavaExecutable(selectedFile);
+                if (javaExe != null) {
+                    String jreHome = Paths.get(javaExe.getParentFile().getAbsolutePath(), "java").toString();
+                    filePathField.setText(jreHome);
+                } else {
+                    // 显示错误信息,选择的文件不是有效的 Java 可执行文件
+                    DialogView.operationResult("Please choose an available Java File");
+                }
+            }
+        });
+
+        VBox dialogContent = new VBox(10, filePathField, openFileChooserBtn);
+        dialog.getDialogPane().setContent(dialogContent);
+
+
+        dialog.setResultConverter(dialogButton -> {
+            if (dialogButton == confirmButtonType) {
+                return filePathField.getText();
+            }
+            return null;
+        });
+
+        // Show the dialog and capture the result
+        dialog.showAndWait().ifPresent(result -> {
+            // Update the label with the selected file path
+            RuntimeController.setJavaPath(result);
+            consoleArea.appendText(RuntimeController.getJVMInfo() + "\n");
+        });
+
+    }
+
 }
