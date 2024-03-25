@@ -23,6 +23,9 @@ import javafx.scene.input.KeyCodeCombination;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
 import javafx.scene.layout.*;
+import javafx.scene.paint.Paint;
+import javafx.scene.text.Text;
+import javafx.scene.text.TextFlow;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
@@ -50,7 +53,7 @@ public class MainView {
     private final StringProperty currentFileType = new SimpleStringProperty("");
 
     private final FileModel project;
-    private TextArea consoleArea;
+    private TextFlow consoleArea;
     private CodeArea codeArea;
 
     private TreeView<File> directoryTree;
@@ -122,20 +125,11 @@ public class MainView {
         SplitPane projectPane = new SplitPane(directoryTree, codeArea);
         projectPane.setOrientation(Orientation.HORIZONTAL);
         projectPane.setDividerPositions(0.2);
-        consoleArea = new TextArea();
-        consoleArea.appendText(RuntimeController.getJVMInfo() + "\n");
-        consoleArea.setEditable(false);
-        TextField inputField = new TextField();
-        inputField.setPromptText("Enter command or input...");
-        inputField.setOnAction(event -> {
-            String inputText = inputField.getText();
-            RuntimeController.redirectToProcess(inputText);
-            consoleArea.appendText(inputText + "\n");
-            inputField.clear();
-        });
-        BorderPane consolePane = new BorderPane();
-        consolePane.setCenter(consoleArea);
-        consolePane.setBottom(inputField);
+        consoleArea = new TextFlow();
+        consoleArea.setLineSpacing(4); // 设置行间距
+        appendColoredText(RuntimeController.getJVMInfo() + "\n", "Red");
+
+        BorderPane consolePane = createConsolePane();
 
         runtimePane.getItems().addAll(projectPane, consolePane);
 
@@ -146,6 +140,25 @@ public class MainView {
         Stage stage = getStage(ownerStage, borderPane);
         stage.show();
 
+    }
+
+    private BorderPane createConsolePane() {
+        var consoleScrollPane = new ScrollPane(consoleArea);
+        consoleScrollPane.setFitToWidth(true); // 让ScrollPane的宽度自适应
+
+        TextField inputField = new TextField();
+        inputField.setPromptText("Enter command or input...");
+        inputField.setOnAction(event -> {
+            String inputText = inputField.getText();
+            RuntimeController.redirectToProcess(inputText);
+            appendColoredText(inputText + "\n", "green");
+            inputField.clear();
+        });
+
+        BorderPane consolePane = new BorderPane();
+        consolePane.setCenter(consoleScrollPane);
+        consolePane.setBottom(inputField);
+        return consolePane;
     }
 
     private void initCodeArea() {
@@ -424,16 +437,16 @@ public class MainView {
     }
 
     private boolean compileProject() {
-        try {
-            saveFile();
-            consoleArea.appendText("Start to compile project files...");
-            if (RuntimeController.buildProject(project.filePath())) {
-                refreshDirectory(null);
-                consoleArea.appendText("Compile success\n");
-                return true;
-            }
-        } catch (Exception e) {
-            DialogView.alertException("Fail to Compile Project", e);
+        saveFile();
+        appendColoredText("Start to compile project files...", "pink");
+        ExecutionResult compileResult = RuntimeController.buildProject(project.filePath());
+        if (compileResult.exitCode() == 0) {
+            refreshDirectory(null);
+            appendColoredText("Compile success\n","pink");
+            return true;
+        } else {
+            appendColoredText("\nError: Fail to Compile Project\n","orange");
+            DialogView.operationResult("Fail to Compile Project" + compileResult.output());
         }
         return false;
     }
@@ -570,6 +583,7 @@ public class MainView {
     private void runProgram() {
         if (!codeRunning) {
             if (compileProject()) {
+                appendColoredText("Start to run file: " + currentPath.toString() + "\n", "orange");
                 new Thread(() -> {
                     Platform.runLater(() -> {
                         runButton.setText("Stop");
@@ -577,12 +591,12 @@ public class MainView {
                     });
                     codeRunning = true;
                     FileModel fileModel = ProjectController.loadCurrentFile(project);
-                    ExecutionResult res = RuntimeController.executeCode(project.filePath(), fileModel, consoleArea::appendText);
+                    ExecutionResult res = RuntimeController.executeCode(project.filePath(), fileModel, this::appendConsoleText);
                     if (res.exitCode() != 0) {
-                        consoleArea.appendText(res.output());
+                        appendConsoleText(res.output());
                     }
                     Platform.runLater(() -> {
-                        consoleArea.appendText("\nProcess finished with exit code " + res.exitCode() + "\n");
+                        appendColoredText("\nProcess finished with exit code " + res.exitCode() + "\n", "orange");
                         runButton.setText("Run");
                         runButton.setGraphic(new FontIcon(Feather.PLAY));
                         codeRunning = false;
@@ -611,6 +625,8 @@ public class MainView {
     public void projectConfig(Stage currentStage) {
         Dialog<String> dialog = new Dialog<>();
         dialog.setTitle("Change JVM Version");
+        dialog.setHeaderText("Please choose the \"java.exe\" file of you wanted JDK version");
+
         ButtonType confirmButtonType = new ButtonType("Confirm", ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(confirmButtonType, ButtonType.CANCEL);
 
@@ -656,9 +672,18 @@ public class MainView {
         dialog.showAndWait().ifPresent(result -> {
             // Update the label with the selected file path
             RuntimeController.setJavaPath(result);
-            consoleArea.appendText(RuntimeController.getJVMInfo() + "\n");
+            appendColoredText(RuntimeController.getJVMInfo() + "\n", "Red");
         });
 
     }
+    private void appendConsoleText(String text) {
+        Text coloredText = new Text(text);
+        consoleArea.getChildren().add(coloredText);
+    }
 
+    private void appendColoredText(String text, String color) {
+        Text coloredText = new Text(text);
+        coloredText.setFill(Paint.valueOf(color));
+        consoleArea.getChildren().add(coloredText);
+    }
 }

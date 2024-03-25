@@ -14,8 +14,6 @@ import javafx.scene.text.Text;
 public class ProjectListCell extends ListCell<FileModel> {
     private final Rectangle icon;
     private final Text initial, nameText,pathText;
-    private final StackPane iconContainer;
-    private final VBox textContainer;
     private final HBox root;
 
     public ProjectListCell() {
@@ -26,11 +24,11 @@ public class ProjectListCell extends ListCell<FileModel> {
         nameText.getStyleClass().addAll(Styles.TEXT_BOLD);
         pathText = new Text();
 
-        iconContainer = new StackPane(icon, initial);
-        textContainer = new VBox(5, nameText, pathText);
+        StackPane iconContainer = new StackPane(icon, initial);
+        VBox textContainer = new VBox(5, nameText, pathText);
         textContainer.setAlignment(Pos.CENTER_LEFT);
 
-        root = new HBox(15,iconContainer, textContainer);
+        root = new HBox(15, iconContainer, textContainer);
     }
     @Override
     public void updateItem(FileModel project, boolean empty) {
