@@ -37,11 +37,7 @@ public class ProjectController {
             try (FileInputStream fileIn = new FileInputStream(configFile);
                  ObjectInputStream in = new ObjectInputStream(fileIn)) {
                 customizeModel = (CustomizeModel) in.readObject();
-            } catch (FileNotFoundException e) {
-                throw new RuntimeException(e);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            } catch (ClassNotFoundException e) {
+            } catch (ClassNotFoundException | IOException e) {
                 throw new RuntimeException(e);
             }
         }
