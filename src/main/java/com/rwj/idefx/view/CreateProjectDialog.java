@@ -61,6 +61,17 @@ public class CreateProjectDialog {
     private FileModel createProject() {
         if (!ApplicationController.validString(pathField.getText())) return null;
         ToggleButton selectedSystem = (ToggleButton) projectSystem.getSelectedToggle();
+        ProjectConfig projectConfig = getProjectConfig(selectedSystem);
+        FileModel projectFileModel = null;
+        try {
+            projectFileModel = ProjectController.createProject(projectConfig);
+        } catch (IOException e) {
+            DialogView.alertException("Error when handling your request",e);
+        }
+        return projectFileModel;
+    }
+
+    private ProjectConfig getProjectConfig(ToggleButton selectedSystem) {
         ToggleButton selectedLanguage = (ToggleButton) projectLanguage.getSelectedToggle();
 
         String projectName = nameField.getText();
@@ -70,14 +81,9 @@ public class CreateProjectDialog {
         String projectLanguage = selectedLanguage.getText();
 
         ProjectConfig projectConfig = new ProjectConfig(projectName, projectPath, firstPath,projectSystem, projectLanguage);
-        FileModel projectFileModel = null;
-        try {
-            projectFileModel = ProjectController.createProject(projectConfig);
-        } catch (IOException e) {
-            DialogView.alertException("Error when handling your request",e);
-        }
-        return projectFileModel;
+        return projectConfig;
     }
+
     private void createGridPane() {
         gridPane = new GridPane();
         gridPane.setVgap(10);
